@@ -17,6 +17,5 @@ def save_deployments(db, check_run_id, deployments):
         deploy_records.append(deploy_record)
         
     db.add_all(deploy_records)
-    db.commit()
     
     return deploy_records

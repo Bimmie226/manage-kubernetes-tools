@@ -7,7 +7,6 @@ def save_service_cluster_ips(db, service_id, list_cluster_ip):
         service_cluster_ips_records.append(service_cluster_ips_record)
         
     db.add_all(service_cluster_ips_records)
-    db.commit()
     
     return service_cluster_ips_records
         

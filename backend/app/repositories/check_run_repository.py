@@ -17,9 +17,6 @@ def complete_check_run(db, check_run):
     check_run.status = "SUCCESS"
     check_run.finished_at = utc_now()
     
-    db.commit()
-    db.refresh(check_run)
-    
     return check_run
 
 def fail_check_run(db, check_run, error): 

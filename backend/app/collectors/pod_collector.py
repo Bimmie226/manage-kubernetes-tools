@@ -7,8 +7,8 @@ def collect_pods(namespace):
     for pod in pods.items: 
         ready_containers = 0
         restart_count = 0
-        if pod.status.container_stateuses: 
-            for container in pod.status.container_stateuses: 
+        if pod.status.container_statuses: 
+            for container in pod.status.container_statuses: 
                 if container.ready: 
                     ready_containers += 1
                 restart_count += container.restart_count

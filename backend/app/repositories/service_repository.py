@@ -17,6 +17,6 @@ def save_service(db, check_run_id, services):
         service_records.append(service_record)
         
     db.add_all(service_records)
-    db.commit()
+    db.flush()
     
     return service_records 

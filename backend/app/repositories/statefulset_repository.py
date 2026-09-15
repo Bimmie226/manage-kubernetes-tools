@@ -17,6 +17,5 @@ def save_statefulset(db, check_run_id, statefulsets):
         statefulset_records.append(statefulset_record)
     
     db.add_all(statefulset_records)
-    db.commit()
     
     return statefulset_records

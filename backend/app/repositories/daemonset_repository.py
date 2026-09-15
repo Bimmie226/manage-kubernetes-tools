@@ -18,6 +18,5 @@ def save_daemonsets(db, check_run_id, daemonsets):
         daemonset_records.append(daemonset_record)
 
     db.add_all(daemonset_records)
-    db.commit()
 
     return daemonset_records

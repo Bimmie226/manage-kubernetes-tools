@@ -7,6 +7,5 @@ def save_service_ports(db, service_id, list_service_port):
         service_ports_records.append(service_ports_record)
         
     db.add_all(service_ports_records)
-    db.commit()
-    
+
     return service_ports_records

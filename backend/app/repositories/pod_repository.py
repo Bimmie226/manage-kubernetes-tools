@@ -17,6 +17,5 @@ def save_pods(db, check_run_id, pods):
         pod_records.append(pod_record)
         
     db.add_all(pod_records)
-    db.commit()
     
     return pod_records

@@ -17,6 +17,5 @@ def save_replicaset(db, check_run_id, replicasets):
         replicaset_records.append(replicaset_record)
     
     db.add_all(replicaset_records)
-    db.commit()
     
     return replicaset_records
