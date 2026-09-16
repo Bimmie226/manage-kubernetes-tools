@@ -38,17 +38,6 @@ def collect_resource_data(namespace):
         "daemonsets": daemonsets   
     }
 
-def get_current_resource(namespace): 
-    cached_data = get_monitoring_cache(namespace=namespace)
-    if cached_data is not None: 
-        return cached_data
-    
-    # cache miss: 
-    resource = collect_resource_data(namespace=namespace)
-    set_monitoring_cache(namespace=namespace, data=resource)
-    
-    return resource
-
 def save_resource_data(db, check_run_id, resource_data): 
     save_nodes(db, check_run_id=check_run_id, nodes=resource_data["nodes"])
     
@@ -78,14 +67,25 @@ def save_resource_data(db, check_run_id, resource_data):
 
 def run_monitoring(db, namespace): 
     check_run = create_check_run(db, namespace=namespace)
-    try: 
+    try:
+        cached_data = get_monitoring_cache(namespace=namespace)
+        if cached_data is not None: 
+            return {
+                "check_run": check_run, 
+                "data": cached_data,
+                "source": "redis"
+            }
         resource_data = collect_resource_data(namespace=namespace)
         save_resource_data(db, check_run_id=check_run.id, resource_data=resource_data)
         complete_check_run(db, check_run=check_run)
         db.commit()
         set_monitoring_cache(namespace=namespace, data=resource_data)
-        return check_run
+        return {
+            "check_run": check_run, 
+            "data": resource_data,
+            "source": "k8s-api"
+        }
     except Exception as e: 
-        db.roll_back()
+        db.rollback()
         fail_check_run(db, check_run=check_run, error=e)
         raise

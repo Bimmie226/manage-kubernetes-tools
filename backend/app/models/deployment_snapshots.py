@@ -10,6 +10,7 @@ class deployment_snapshots(Base):
     deployment_name = Column(String(255), nullable=False)
     desired_replicas = Column(Integer)
     current_replicas = Column(Integer)
+    ready_replicas = Column(Integer)
     updated_replicas = Column(Integer)
     available_replicas = Column(Integer)
     created_at = Column(DateTime) 

@@ -35,3 +35,5 @@ spec:
   selector:
     app: nginx-deployment
   type: LoadBalancer
+
+

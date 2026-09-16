@@ -13,7 +13,7 @@ def save_deployments(db, check_run_id, deployments):
     checked_at = utc_now()
     deploy_records = []
     for deploy in deployments: 
-        deploy_record = deployment_snapshots(check_run_id=check_run_id, namespace=deploy["namespace"], deployment_name=deploy["deployment_name"], desired_replicas = deploy["desired_replicas"], current_replicas = deploy["current_replicas"], updated_replicas = deploy["updated_replicas"], available_replicas = deploy["available_replicas"], created_at = to_db_datetime(deploy["created_at"]), checked_at = checked_at)
+        deploy_record = deployment_snapshots(check_run_id=check_run_id, namespace=deploy["namespace"], deployment_name=deploy["deployment_name"], desired_replicas = deploy["desired_replicas"], current_replicas = deploy["current_replicas"], ready_replicas = deploy["ready_replicas"], updated_replicas = deploy["updated_replicas"], available_replicas = deploy["available_replicas"], created_at = to_db_datetime(deploy["created_at"]), checked_at = checked_at)
         deploy_records.append(deploy_record)
         
     db.add_all(deploy_records)
