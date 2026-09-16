@@ -1,9 +1,8 @@
 from app.services.monitoring_service import run_monitoring
 from app.database.connection import SessionLocal
 
-db = SessionLocal()
-
 def test_monitoring(): 
+    db = SessionLocal()
     try: 
         namespace = "monitoring"
         check_run = run_monitoring(db=db, namespace=namespace)

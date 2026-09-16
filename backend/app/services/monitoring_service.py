@@ -16,47 +16,76 @@ from app.repositories.service_ports_repository import save_service_ports
 from app.repositories.replicaset_repository import save_replicaset
 from app.repositories.statefulset_repository import save_statefulset
 from app.repositories.daemonset_repository import save_daemonsets
+from app.cache.monitoring_cache import get_monitoring_cache, set_monitoring_cache
+
+def collect_resource_data(namespace): 
+    nodes = collect_node()
+    pods = collect_pods(namespace=namespace)
+    deployments = collect_deployments(namespace=namespace)
+    services = collect_services(namespace=namespace)
+    replicasets = collect_replicaset(namespace=namespace)
+    statefulsets = collect_statefulset(namespace=namespace)
+    daemonsets = collect_daemonsets(namespace=namespace)
+    
+    return {
+        "namespace": namespace, 
+        "nodes": nodes, 
+        "pods": pods, 
+        "deployments": deployments, 
+        "services": services, 
+        "replicasets": replicasets, 
+        "statefulsets": statefulsets, 
+        "daemonsets": daemonsets   
+    }
+
+def get_current_resource(namespace): 
+    cached_data = get_monitoring_cache(namespace=namespace)
+    if cached_data is not None: 
+        return cached_data
+    
+    # cache miss: 
+    resource = collect_resource_data(namespace=namespace)
+    set_monitoring_cache(namespace=namespace, data=resource)
+    
+    return resource
+
+def save_resource_data(db, check_run_id, resource_data): 
+    save_nodes(db, check_run_id=check_run_id, nodes=resource_data["nodes"])
+    
+    # Save POD
+    save_pods(db, check_run_id=check_run_id, pods=resource_data["pods"])
+    
+    # Save DEPLOYMENT
+    save_deployments(db, check_run_id=check_run_id, deployments=resource_data["deployments"])
+    
+    # Save SERVICE 
+    services = resource_data["services"]
+    saved_services = save_service(db, check_run_id=check_run_id, services=resource_data["services"])
+    
+    for service, saved_service in zip(services, saved_services): 
+        save_service_cluster_ips(db, service_id=saved_service.id, list_cluster_ip=service["cluster_ips"])
+        save_service_external_ips(db, service_id=saved_service.id, list_external_ip=service["external_ips"])
+        save_service_ports(db, service_id=saved_service.id, list_service_port=service["ports"])
+    
+    # Save REPLICASET 
+    save_replicaset(db, check_run_id=check_run_id, replicasets=resource_data["replicasets"])
+    
+    # Save STATEFULSET 
+    save_statefulset(db, check_run_id=check_run_id, statefulsets=resource_data["statefulsets"])
+    
+    # Save DAEMONSET 
+    save_daemonsets(db, check_run_id=check_run_id, daemonsets=resource_data["daemonsets"])
 
 def run_monitoring(db, namespace): 
     check_run = create_check_run(db, namespace=namespace)
     try: 
-        # Save NODE 
-        nodes = collect_node()
-        save_nodes(db, check_run_id=check_run.id, nodes=nodes)
-        
-        # Save POD
-        pods = collect_pods(namespace=namespace)
-        save_pods(db, check_run_id=check_run.id, pods=pods)
-        
-        # Save DEPLOYMENT
-        deployments = collect_deployments(namespace=namespace)
-        save_deployments(db, check_run_id=check_run.id, deployments=deployments)
-        
-        # Save SERVICE 
-        services = collect_services(namespace=namespace)
-        saved_services = save_service(db, check_run_id=check_run.id, services=services)
-        
-        for service, saved_service in zip(services, saved_services): 
-            save_service_cluster_ips(db, service_id=saved_service.id, list_cluster_ip=service["cluster_ips"])
-            save_service_external_ips(db, service_id=saved_service.id, list_external_ip=service["external_ips"])
-            save_service_ports(db, service_id=saved_service.id, list_service_port=service["ports"])
-        
-        # Save REPLICASET 
-        replicasets = collect_replicaset(namespace=namespace)
-        save_replicaset(db, check_run_id=check_run.id, replicasets=replicasets)
-        
-        # Save STATEFULSET 
-        statefulsets = collect_statefulset(namespace=namespace)
-        save_statefulset(db, check_run_id=check_run.id, statefulsets=statefulsets)
-        
-        # Save DAEMONSET 
-        daemonsets = collect_daemonsets(namespace=namespace)
-        save_daemonsets(db, check_run_id=check_run.id, daemonsets=daemonsets)
-        
+        resource_data = collect_resource_data(namespace=namespace)
+        save_resource_data(db, check_run_id=check_run.id, resource_data=resource_data)
         complete_check_run(db, check_run=check_run)
         db.commit()
-        return check_run 
+        set_monitoring_cache(namespace=namespace, data=resource_data)
+        return check_run
     except Exception as e: 
-        db.rollback()
+        db.roll_back()
         fail_check_run(db, check_run=check_run, error=e)
         raise

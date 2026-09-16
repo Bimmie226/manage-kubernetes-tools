@@ -13,4 +13,8 @@ class Settings:
     DB_USER = os.getenv("DB_USER")
     DB_PASSWORD = os.getenv("DB_PASSWORD")
     
+    REDIS_HOST = os.getenv("REDIS_HOST")
+    REDIS_PORT = os.getenv("REDIS_PORT")
+    REDIS_DB = os.getenv("REDIS_DB")
+    REDIS_TTL = os.getenv("REDIS_TTL")
 settings = Settings()
