@@ -24,6 +24,7 @@ button:disabled { cursor: wait; opacity: .65; }
 .nav-label { font-size: 10px; letter-spacing: 1.4px; color: #91a2bd; margin: 52px 12px 16px; }
 .nav-item { display: flex; gap: 12px; align-items: center; padding: 12px 16px; border-radius: 8px; font-weight: 600; }
 .active { color: #afcaff; background: #233757; border: 1px solid #304c76; }
+.sidebar nav { display: grid; gap: 8px; }
 .sidebar-note { margin-top: auto; border-top: 1px solid #2c3a50; padding-top: 20px; font-size: 12px; }
 .sidebar-note p { color: #92a4c0; }
 .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #60a5fa; margin-right: 6px; }
@@ -83,6 +84,7 @@ th, td { padding: 14px 24px; border-top: 1px solid var(--border); overflow-wrap:
 td:first-child { font-family: var(--mono); font-weight: 600; }
 .resource-status { color: var(--success); background: #e9f9f0; padding: 4px 8px; border-radius: 5px; }
 .page-footer { display: flex; justify-content: space-between; color: #8492a6; font-size: 11px; padding-top: 28px; }
+@media (max-width: 760px) { .sidebar { flex-wrap: wrap; } .sidebar nav { display: flex; flex-wrap: wrap; } }
 @media (min-width: 1600px) { .page { padding-top: 48px; } textarea { min-height: 400px; } }
 @media (max-width: 1150px) { .sidebar { width: 205px; padding: 26px 14px; } main { margin-left: 205px; } .page { padding: 24px; } .workspace-grid { grid-template-columns: minmax(0, 1fr); } .guide { padding: 4px 0; } .guide ol { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; } .guide li { margin-bottom: 0; } }
 @media (max-width: 760px) { .sidebar { position: static; width: 100%; padding: 16px 20px; flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; } .brand { font-size: 16px; } .brand-icon { font-size: 26px; width: 36px; line-height: 36px; } .brand small { font-size: 8px; letter-spacing: 1px; } .nav-label, .sidebar-note { display: none; } .nav-item { font-size: 11px; padding: 9px; gap: 6px; } main { margin-left: 0; } .topbar { height: 56px; padding: 0 20px; font-size: 12px; } .page { padding: 24px 16px; } .connection { grid-template-columns: 1fr; gap: 16px; padding: 20px; } .card-heading { padding: 20px; } .mode-switch { padding: 0 12px; } textarea { padding: 20px; } .submit-row { flex-direction: column; align-items: stretch; padding: 18px 20px; } .submit-row p { max-width: none; } .editor-footer { padding: 10px 20px; } .guide ol { display: block; } .guide li { margin-bottom: 18px; } .topbar > .pill { display: none; } }
