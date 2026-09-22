@@ -18,22 +18,51 @@ let mode = 'success';
 const requests = [];
 const errors = [];
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+function monitoringFixture(namespace) {
+    const workload = { namespace, desired_replicas: 2, current_replicas: 2, ready_replicas: 1 };
+    const data = {
+        namespace,
+        nodes: [
+            { node_name: '<img src=x onerror=alert(1)>', conditions: [{ condition_type: 'Ready', condition_status: 'True', reason: 'KubeletReady', message: '<script>unsafe()</script>' }, { condition_type: 'DiskPressure', condition_status: 'True' }] },
+            { node_name: 'worker-2', conditions: [{ condition_type: 'Ready', condition_status: 'False' }] },
+            { node_name: 'worker-unknown', conditions: [] }
+        ],
+        pods: [
+            { namespace, pod_name: 'web-pod', phase: 'Running', ready_containers: 1, total_containers: 2, restart_count: 3 },
+            { namespace, pod_name: 'job-pod', phase: 'Succeeded', ready_containers: 0, total_containers: 1, restart_count: 0 }
+        ],
+        deployments: [{ ...workload, deployment_name: 'web', updated_replicas: 1, available_replicas: 1 }],
+        services: [{ namespace, service_name: 'web-svc', service_type: 'NodePort', cluster_ips: ['10.0.0.1'], external_ips: [], ports: [{ port: 80, node_port: 30080, protocol: 'TCP' }] }],
+        replicasets: [{ ...workload, replicaset_name: 'web-rs', ready_replicas: null }],
+        statefulsets: [{ ...workload, statefulset_name: 'db', desired_replicas: 0, ready_replicas: null }],
+        daemonsets: [{ namespace, daemonset_name: 'agent', desired_scheduled: 2, current_scheduled: 2, ready: 2, updated_scheduled: 2, available: 2, node_selector: { 'kubernetes.io/os': 'linux' } }]
+    };
+    if (mode === 'empty') for (const key of Object.keys(data)) if (Array.isArray(data[key])) data[key] = [];
+    if (mode === 'mismatch') data.namespace = 'other-namespace';
+    return { namespace, source: mode === 'cache' ? 'redis' : 'k8s-api', check_run_id: 42, status: mode === 'cache' ? 'RUNNING' : 'SUCCESS', data };
+}
 const server = http.createServer(async (req, res) => {
     if (req.url.startsWith('/api/')) {
         let body = '';
         for await (const chunk of req) body += chunk;
-        requests.push({ url: req.url, headers: req.headers, body });
+        requests.push({ url: req.url, method: req.method, headers: req.headers, body });
         await pause(150);
         if (mode === 'network') return req.socket.destroy();
         if (mode === 'nonjson') { res.writeHead(502); return res.end('upstream unavailable'); }
         res.setHeader('Content-Type', 'application/json');
+        if (req.url.startsWith('/api/monitoring/')) {
+            if (mode === 'error') { res.writeHead(500); return res.end(JSON.stringify({ detail: 'secret-value' })); }
+            if (mode === 'invalidjson') return res.end('not json');
+            if (mode === 'malformed') return res.end(JSON.stringify({ data: {} }));
+            return res.end(JSON.stringify(monitoringFixture(decodeURIComponent(req.url.split('/')[3]))));
+        }
         if (mode === 'error') { res.writeHead(400); return res.end(JSON.stringify({ detail: 'Invalid YAML: secret-value' })); }
         if (mode === 'malformed') return res.end(JSON.stringify({ message: 'unexpected' }));
         return res.end(JSON.stringify({ total: mode === 'empty' ? 0 : 1, results: mode === 'empty' ? [] : [
             { name: '<img src=x onerror=alert(1)>', kind: 'ConfigMap', namespace: null, api_version: 'v1', status: 'APPLIED' }
         ] }));
     }
-    const files = { '/': ['index.html', 'text/html'], '/css/styles.css': ['css/styles.css', 'text/css'], '/js/app.js': ['js/app.js', 'text/javascript'] };
+    const files = { '/': ['index.html', 'text/html'], '/index.html': ['index.html', 'text/html'], '/css/styles.css': ['css/styles.css', 'text/css'], '/js/app.js': ['js/app.js', 'text/javascript'], '/monitoring.html': ['monitoring.html', 'text/html'], '/css/monitoring.css': ['css/monitoring.css', 'text/css'], '/js/monitoring.js': ['js/monitoring.js', 'text/javascript'] };
     const file = files[req.url];
     if (!file) { res.writeHead(404); return res.end(); }
     res.setHeader('Content-Type', `${file[1]}; charset=utf-8`);
@@ -129,8 +158,63 @@ async function run() {
         assert.equal(await evaluate("element('table-wrapper').hidden"), true);
         assert.equal(await evaluate("element('feedback').textContent.includes('secret-value')"), false);
     }
+    mode = 'success';
+    const beforeMonitoring = requests.length;
+    await evaluate("document.querySelector('a[href=\"monitoring.html\"]').click()");
+    await until('document.readyState === "complete" && !!document.getElementById("monitoring-form")');
+    assert.equal(requests.length, beforeMonitoring, 'Monitoring must wait for explicit submit');
+    await evaluate(`document.getElementById('monitoring-api').value = ${JSON.stringify(origin)}; document.getElementById('namespace').value = 'bad/name'; document.getElementById('check-button').click()`);
+    assert.equal(requests.length, beforeMonitoring, 'Reject invalid namespace locally');
+    await evaluate("document.getElementById('namespace').value = 'demo'; document.getElementById('check-button').click(); document.getElementById('check-button').click()");
+    assert.equal(await evaluate("document.getElementById('monitoring-feedback').dataset.state"), 'loading');
+    assert.equal(await evaluate("document.getElementById('monitoring-controls').disabled"), true);
+    await until("!document.getElementById('monitoring-controls').disabled");
+    assert.equal(requests.length, beforeMonitoring + 1, 'Monitoring duplicate submissions blocked');
+    assert.equal(requests.at(-1).url, '/api/monitoring/demo/check');
+    assert.equal(requests.at(-1).method, 'POST');
+    assert.equal(requests.at(-1).body, '');
+    assert.equal(await evaluate("document.getElementById('monitoring-feedback').dataset.state"), 'success');
+    assert.equal(await evaluate("document.getElementById('node-total').textContent"), '3');
+    assert.equal(await evaluate("document.getElementById('node-ready').textContent"), '1');
+    assert.equal(await evaluate("document.getElementById('resource-total').textContent"), '7');
+    assert.equal(await evaluate("document.querySelectorAll('#resource-groups > details').length"), 6);
+    assert.equal(await evaluate("document.querySelectorAll('#monitoring-results img, #monitoring-results script').length"), 0);
+    assert.ok(await evaluate("document.getElementById('node-content').textContent.includes('Unknown')"));
+    assert.ok(await evaluate("document.getElementById('node-content').textContent.includes('NotReady')"));
+    assert.ok(await evaluate("document.querySelector('#group-replicasets .health-badge').textContent.includes('Chưa rõ')"));
+    assert.equal(await evaluate("document.querySelector('#group-statefulsets .health-badge').textContent"), 'Desired = 0');
+    assert.ok(await evaluate("document.getElementById('group-services').textContent.includes('30080')"));
+    assert.ok(await evaluate("document.getElementById('group-services').textContent.includes('Chưa có dữ liệu')"));
+    assert.equal(await evaluate("document.querySelector('#group-pods .health-badge').dataset.tone"), 'warn');
+    assert.equal(await evaluate("document.querySelector('#group-daemonsets .health-badge').dataset.tone"), 'good');
+    for (const width of [375, 768, 1440]) {
+        await command('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false });
+        assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true, `Monitoring page overflow at ${width}px`);
+        assert.ok(await evaluate("document.getElementById('check-button').getBoundingClientRect().width > 0"));
+        const screenshot = await command('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+        fs.writeFileSync(path.join(profile, `monitoring-${width}.png`), Buffer.from(screenshot.data, 'base64'));
+    }
+    mode = 'cache';
+    await evaluate("document.getElementById('check-button').click()");
+    await until("!document.getElementById('monitoring-controls').disabled");
+    assert.ok(await evaluate("document.getElementById('snapshot-source').textContent.includes('Redis')"));
+    assert.equal(await evaluate("document.getElementById('snapshot-status').textContent"), 'RUNNING');
+    assert.equal(await evaluate("document.getElementById('monitoring-results').hidden"), false, 'Cached RUNNING does not suppress snapshot');
+    for (const state of ['empty', 'error', 'nonjson', 'invalidjson', 'malformed', 'mismatch', 'network']) {
+        mode = state;
+        await evaluate("document.getElementById('check-button').click()");
+        assert.equal(await evaluate("document.getElementById('monitoring-results').hidden"), true, 'Hide old namespace snapshot while loading');
+        await until("!document.getElementById('monitoring-controls').disabled");
+        assert.equal(await evaluate("document.getElementById('monitoring-feedback').dataset.state"), state === 'empty' ? 'empty' : 'error');
+        assert.equal(await evaluate("document.getElementById('monitoring-results').hidden"), state !== 'empty');
+        assert.equal(await evaluate("document.getElementById('namespace').value"), 'demo');
+        assert.equal(await evaluate("document.getElementById('monitoring-feedback').textContent.includes('secret-value')"), false);
+        if (state === 'empty') assert.equal(await evaluate("document.querySelectorAll('#resource-groups .empty-state').length"), 6);
+    }
+    await evaluate("document.querySelector('nav a[href=\"index.html\"]').click()");
+    await until('document.readyState === "complete" && typeof submitManifest === "function"');
     assert.deepEqual(errors, [], 'No uncaught browser JavaScript exceptions');
-    console.log('PASS: text/file API contracts, duplicate prevention, safe rendering, loading/empty/error states, input preservation, responsive widths, browser exceptions.');
+    console.log('PASS: manifest and monitoring API contracts, keyboard input, navigation, duplicate prevention, safe rendering, readiness/unknown/scaled-zero states, cache metadata, loading/empty/errors, namespace validation, responsive widths, browser exceptions.');
     console.log(`Screenshots: ${profile}`);
 }
 
